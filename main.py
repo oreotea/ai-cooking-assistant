@@ -7,7 +7,6 @@ from PIL import Image, ImageFilter
 import numpy as np
 import io
 import random
-import requests
 
 # Load environment variables from .env file
 load_dotenv()
@@ -120,6 +119,10 @@ st.markdown("<h1 style='text-align: center;'>AI-Powered Cooking Assistant</h1>",
 st.subheader("Upload Ingredients")
 uploaded_files = st.file_uploader("Upload ingredient images", accept_multiple_files=True, type=["png", "jpg", "jpeg"])
 
+# Live camera section for capturing images in real-time
+st.subheader("Or Use Your Camera")
+camera_image = st.camera_input("Take a picture of the ingredients")
+
 # Filters and servings below the file uploader
 col1, col2 = st.columns([1, 1])
 
@@ -136,53 +139,62 @@ with col2:
     st.subheader("Servings")
     servings = st.number_input("Number of Servings", min_value=1, max_value=20, value=1)
 
-# Recipe processing
+# Function to process and analyze images (from file upload or camera)
+def process_image(image):
+    # Check the resolution of the image
+    if image.size[0] < 300 or image.size[1] < 300:
+        st.error("The resolution is too low. Please upload a higher-resolution image.")
+        return None
+
+    # Check if the image is blurry using Pillow
+    if is_image_blurry(image):
+        st.error("The image is too blurry. Please upload a clearer image.")
+        return None
+
+    # Compress the image before sending it to the API
+    compressed_image_bytes = compress_image(image)
+
+    # Analyze the image with a loading spinner
+    with st.spinner("Analyzing the image..."):
+        ingredients = analyze_ingredient(compressed_image_bytes)
+        return ingredients
+
+# Analyze images from either file upload or live camera
+ingredients_list = []
+
 if uploaded_files:
-    ingredients_list = []
-
     for uploaded_file in uploaded_files:
-        # Open the image using PIL
         image = Image.open(uploaded_file)
+        ingredients = process_image(image)
+        if ingredients:
+            ingredients_list.append(ingredients)
+            st.success(f"Identified Ingredients in {uploaded_file.name}: {ingredients}")
 
-        # Check the resolution of the image
-        if image.size[0] < 300 or image.size[1] < 300:
-            st.error(f"The resolution of {uploaded_file.name} is too low. Please upload a higher-resolution image.")
-            continue
+elif camera_image:
+    # Process the live camera image
+    image = Image.open(camera_image)
+    ingredients = process_image(image)
+    if ingredients:
+        ingredients_list.append(ingredients)
+        st.success(f"Identified Ingredients: {ingredients}")
 
-        # Check if the image is blurry using Pillow
-        if is_image_blurry(image):
-            st.error(f"The image {uploaded_file.name} is too blurry. Please upload a clearer image.")
-            continue
+# Suggest a recipe based on the detected ingredients
+if ingredients_list:
+    all_ingredients = ", ".join(ingredients_list)
+    st.write(f"**All identified ingredients:** {all_ingredients}")
+    with st.spinner(f"Suggesting a recipe for {servings} servings..."):
+        recipe = suggest_single_recipe(all_ingredients, servings)
+        if recipe:
+            st.write("### Suggested Recipe")
+            st.write(recipe)
 
-        # Compress the image before sending it to the API
-        compressed_image_bytes = compress_image(image)
-
-        # Analyze each compressed image with a loading spinner
-        with st.spinner(f"Analyzing {uploaded_file.name}..."):
-            ingredients = analyze_ingredient(compressed_image_bytes)
-            if ingredients:
-                ingredients_list.append(ingredients)
-                st.success(f"Identified Ingredients in {uploaded_file.name}: {ingredients}")
-            else:
-                st.error(f"Could not identify ingredients in {uploaded_file.name}. Please try a different image.")
-
-    # Suggest a single recipe based on the identified ingredients
-    if ingredients_list:
-        all_ingredients = ", ".join(ingredients_list)
-        st.write(f"**All identified ingredients:** {all_ingredients}")
-        with st.spinner(f"Suggesting a recipe for {servings} servings..."):
-            recipe = suggest_single_recipe(all_ingredients, servings)
-            if recipe:
-                st.write("### Suggested Recipe")
-                st.write(recipe)
-
-                # Display additional recipe links
-                st.write("### You might also like these recipe sources:")
-                for link in get_additional_recipe_links():
-                    if st.button(f"Open {link}"):
-                        # Show the link content within a pop-up window
-                        st.markdown(f"<iframe src='{link}' width='100%' height='600px'></iframe>", unsafe_allow_html=True)
-            else:
-                st.error("Failed to suggest a recipe based on the identified ingredients.")
+            # Display additional recipe links
+            st.write("### You might also like these recipe sources:")
+            for link in get_additional_recipe_links():
+                if st.button(f"Open {link}"):
+                    # Show the link content within a pop-up window
+                    st.markdown(f"<iframe src='{link}' width='100%' height='600px'></iframe>", unsafe_allow_html=True)
+        else:
+            st.error("Failed to suggest a recipe based on the identified ingredients.")
 else:
-    st.warning("Please upload one or more images to continue.")
+    st.warning("Please upload an image or take a picture to continue.")
