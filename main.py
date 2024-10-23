@@ -3,8 +3,7 @@ import base64
 import os
 from dotenv import load_dotenv
 import streamlit as st
-from PIL import Image
-import cv2
+from PIL import Image, ImageFilter
 import numpy as np
 import io
 import random
@@ -18,9 +17,11 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # Image quality checks
 def is_image_blurry(image, threshold=100):
-    gray = np.array(image.convert("L"))
-    variance_of_laplacian = cv2.Laplacian(gray, cv2.CV_64F).var()
-    return variance_of_laplacian < threshold
+    # Use Pillow to detect edges and calculate variance to estimate blurriness
+    gray_image = image.convert("L")  # Convert to grayscale
+    edges = gray_image.filter(ImageFilter.FIND_EDGES)
+    variance = np.var(np.array(edges))
+    return variance < threshold
 
 def compress_image(image, quality=85):
     # Compress the image by saving it with reduced quality
@@ -148,7 +149,7 @@ if uploaded_files:
             st.error(f"The resolution of {uploaded_file.name} is too low. Please upload a higher-resolution image.")
             continue
 
-        # Check if the image is blurry
+        # Check if the image is blurry using Pillow
         if is_image_blurry(image):
             st.error(f"The image {uploaded_file.name} is too blurry. Please upload a clearer image.")
             continue
