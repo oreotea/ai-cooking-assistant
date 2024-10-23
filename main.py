@@ -7,6 +7,7 @@ from PIL import Image
 import cv2
 import numpy as np
 import io
+import random
 
 # Load environment variables from .env file
 load_dotenv()
@@ -69,17 +70,22 @@ def analyze_ingredient(image_bytes):
         st.error(f"An error occurred: {str(e)}")
         return None
 
-def suggest_recipe(ingredients):
+def suggest_single_recipe(ingredients):
     try:
-        # Send identified ingredients to Llama3.2 to get recipe suggestions
+        # Request a single recipe suggestion
+        prompt = (
+            f"Suggest a recipe using these ingredients: {ingredients}. "
+            "Provide the recipe name, ingredients list, and detailed instructions."
+        )
+
         response = client.chat.completions.create(
             model="llama-3.2-11b-text-preview",
             messages=[
-                {"role": "user", "content": f"Suggest a recipe using these ingredients: {ingredients}"}
+                {"role": "user", "content": prompt}
             ]
         )
 
-        # Check if the response contains the expected data
+        # Parse the response to get the recipe
         if response.choices and response.choices[0].message.content:
             return response.choices[0].message.content
         else:
@@ -90,11 +96,30 @@ def suggest_recipe(ingredients):
         st.error(f"An error occurred: {str(e)}")
         return None
 
+def get_additional_recipe_links():
+    # Provide a few random recipe links from popular sites
+    links = [
+        "https://www.allrecipes.com/",
+        "https://www.foodnetwork.com/",
+        "https://www.bonappetit.com/",
+        "https://www.epicurious.com/",
+        "https://www.bbcgoodfood.com/"
+    ]
+    return random.sample(links, 3)
+
 # Streamlit UI
 st.title("AI-Powered Cooking Assistant")
 
 # File uploader
 uploaded_files = st.file_uploader("Upload ingredient images", accept_multiple_files=True, type=["png", "jpg", "jpeg"])
+
+# Recipe filters (not functional yet)
+cuisine_filter = st.selectbox("Cuisine Type", options=["All", "Italian", "Mexican", "Indian", "Chinese", "American"])
+difficulty_filter = st.selectbox("Difficulty Level", options=["All", "Easy", "Medium", "Hard"])
+dietary_filter = st.selectbox("Dietary Restrictions", options=["All", "Vegetarian", "Vegan", "Gluten-Free", "None"])
+
+# Display a message indicating the filters are not functional
+st.info("Recipe filtering is coming soon!")
 
 if uploaded_files:
     ingredients_list = []
@@ -125,15 +150,20 @@ if uploaded_files:
             else:
                 st.error(f"Could not identify ingredients in {uploaded_file.name}. Please try a different image.")
 
-    # Suggest recipes based on the identified ingredients
+    # Suggest a single recipe based on the identified ingredients
     if ingredients_list:
         all_ingredients = ", ".join(ingredients_list)
         st.write(f"**All identified ingredients:** {all_ingredients}")
         with st.spinner("Suggesting a recipe..."):
-            recipe = suggest_recipe(all_ingredients)
+            recipe = suggest_single_recipe(all_ingredients)
             if recipe:
-                st.write("**Suggested Recipe:**")
+                st.write("### Suggested Recipe")
                 st.write(recipe)
+                
+                # Display additional recipe links
+                st.write("### You might also like these recipe sources:")
+                for link in get_additional_recipe_links():
+                    st.write(f"- [Visit {link}]({link})")
             else:
                 st.error("Failed to suggest a recipe based on the identified ingredients.")
 else:
