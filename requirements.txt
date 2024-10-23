@@ -1,0 +1,6 @@
+groq
+streamlit
+Pillow
+opencv-python
+requests
+python-dotenv
