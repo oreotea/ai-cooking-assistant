@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 import io
 import random
+import requests
 
 # Load environment variables from .env file
 load_dotenv()
@@ -70,12 +71,13 @@ def analyze_ingredient(image_bytes):
         st.error(f"An error occurred: {str(e)}")
         return None
 
-def suggest_single_recipe(ingredients):
+def suggest_single_recipe(ingredients, servings=1):
     try:
-        # Request a single recipe suggestion
+        # Request a single recipe suggestion with customized servings
         prompt = (
             f"Suggest a recipe using these ingredients: {ingredients}. "
-            "Provide the recipe name, ingredients list, and detailed instructions."
+            f"Provide the recipe for {servings} servings, including the recipe name, ingredients list, "
+            "and detailed instructions adjusted for the specified number of servings."
         )
 
         response = client.chat.completions.create(
@@ -107,20 +109,33 @@ def get_additional_recipe_links():
     ]
     return random.sample(links, 3)
 
-# Streamlit UI
-st.title("AI-Powered Cooking Assistant")
+# Streamlit UI Layout
+st.set_page_config(layout="wide")
 
-# File uploader
+# Title centered at the top
+st.markdown("<h1 style='text-align: center;'>AI-Powered Cooking Assistant</h1>", unsafe_allow_html=True)
+
+# File uploader in the center below the title
+st.subheader("Upload Ingredients")
 uploaded_files = st.file_uploader("Upload ingredient images", accept_multiple_files=True, type=["png", "jpg", "jpeg"])
 
-# Recipe filters (not functional yet)
-cuisine_filter = st.selectbox("Cuisine Type", options=["All", "Italian", "Mexican", "Indian", "Chinese", "American"])
-difficulty_filter = st.selectbox("Difficulty Level", options=["All", "Easy", "Medium", "Hard"])
-dietary_filter = st.selectbox("Dietary Restrictions", options=["All", "Vegetarian", "Vegan", "Gluten-Free", "None"])
+# Filters and servings below the file uploader
+col1, col2 = st.columns([1, 1])
 
-# Display a message indicating the filters are not functional
-st.info("Recipe filtering is coming soon!")
+# Filters on the left (col1)
+with col1:
+    st.subheader("Recipe Filters")
+    cuisine_filter = st.selectbox("Cuisine Type", options=["All", "Italian", "Mexican", "Indian", "Chinese", "American"])
+    difficulty_filter = st.selectbox("Difficulty Level", options=["All", "Easy", "Medium", "Hard"])
+    dietary_filter = st.selectbox("Dietary Restrictions", options=["All", "Vegetarian", "Vegan", "Gluten-Free", "None"])
+    st.info("Recipe filtering is coming soon!")
 
+# Servings on the right (col2)
+with col2:
+    st.subheader("Servings")
+    servings = st.number_input("Number of Servings", min_value=1, max_value=20, value=1)
+
+# Recipe processing
 if uploaded_files:
     ingredients_list = []
 
@@ -154,16 +169,18 @@ if uploaded_files:
     if ingredients_list:
         all_ingredients = ", ".join(ingredients_list)
         st.write(f"**All identified ingredients:** {all_ingredients}")
-        with st.spinner("Suggesting a recipe..."):
-            recipe = suggest_single_recipe(all_ingredients)
+        with st.spinner(f"Suggesting a recipe for {servings} servings..."):
+            recipe = suggest_single_recipe(all_ingredients, servings)
             if recipe:
                 st.write("### Suggested Recipe")
                 st.write(recipe)
-                
+
                 # Display additional recipe links
                 st.write("### You might also like these recipe sources:")
                 for link in get_additional_recipe_links():
-                    st.write(f"- [Visit {link}]({link})")
+                    if st.button(f"Open {link}"):
+                        # Show the link content within a pop-up window
+                        st.markdown(f"<iframe src='{link}' width='100%' height='600px'></iframe>", unsafe_allow_html=True)
             else:
                 st.error("Failed to suggest a recipe based on the identified ingredients.")
 else:
